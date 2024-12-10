@@ -1,49 +1,88 @@
 import React, { useState } from 'react';
-import Navbar from './components/navbar'; // 確保正確導入 Navbar
+import Navbar from './components/navbar';
 
 const App: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileUrl, setFileUrl] = useState<string>("");
+  const [responseMessage, setResponseMessage] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null); // 新增圖片預覽 URL
+  const [fileInputKey, setFileInputKey] = useState<number>(0); // 用於重置檔案輸入
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
-      setSelectedFile(event.target.files[0]);
-      console.log("Selected file:", event.target.files[0].name);
-      setFileUrl(""); // 如果選擇了檔案，清空網址輸入框
+      const file = event.target.files[0];
+      setSelectedFile(file);
+      setFileUrl(""); // 清空網址
+
+      // 如果檔案是圖片類型，設定預覽 URL
+      if (file.type.startsWith("image/")) {
+        const imagePreviewUrl = URL.createObjectURL(file);
+        setPreviewUrl(imagePreviewUrl);
+      } else {
+        setPreviewUrl(null); // 如果不是圖片類型，清除預覽
+      }
     }
   };
 
   const handleUrlChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setFileUrl(event.target.value);
-    setSelectedFile(null); // 如果輸入了網址，清空檔案選擇
+    setSelectedFile(null); // 清空檔案
+    setPreviewUrl(null); // 清除圖片預覽
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
+    const formData = new FormData();
+
     if (selectedFile) {
-      // 處理檔案上傳邏輯
-      console.log("Uploading file:", selectedFile.name);
-      alert(`File "${selectedFile.name}" uploaded successfully!`);
+      formData.append("file", selectedFile);
+      setSelectedFile(null);
+      setPreviewUrl(null); // 清空圖片預覽
     } else if (fileUrl) {
-      // 處理網址上傳邏輯
-      console.log("Uploading file from URL:", fileUrl);
-      alert(`File from URL "${fileUrl}" uploaded successfully!`);
+      formData.append("url", fileUrl);
+      setFileUrl("");
     } else {
-      alert("Please select a file or enter a URL before uploading.");
+      alert("上傳前請選擇檔案或輸入 URL。");
+      return;
     }
+
+    try {
+      const response = await fetch("http://127.0.0.1:5000/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setResponseMessage(`上傳成功: ${result.message}`);
+        setFileInputKey((prevKey) => prevKey + 1);
+        setFileUrl("");
+        setSelectedFile(null);
+      } else {
+        setResponseMessage(`上傳失敗: ${result.message}`);
+      }
+    } catch (error) {
+      setResponseMessage("上傳時發生錯誤。");
+    }
+  };
+
+  const handleClear = () => {
+    setSelectedFile(null);
+    setFileUrl("");
+    setPreviewUrl(null); // 清空圖片預覽
+    setResponseMessage(null);
+
+    setFileInputKey((prevKey) => prevKey + 1);
   };
 
   return (
     <>
-      {/* 導航列 */}
       <Navbar />
-
-      {/* 主內容區域 */}
       <div className="container mx-auto mt-10 p-4">
         <h1 className="text-2xl font-bold mb-6 text-center">檔案與網址上傳</h1>
-
-        {/* 檔案選擇和上傳功能 */}
         <div className="flex flex-col items-center gap-4">
           <input
+            key={fileInputKey}
             type="file"
             onChange={handleFileChange}
             className="block w-full max-w-xs p-2 border rounded-md shadow-sm"
@@ -55,18 +94,32 @@ const App: React.FC = () => {
             placeholder="請輸入檔案網址"
             className="block w-full max-w-xs p-2 border rounded-md shadow-sm"
           />
-          <button
-            onClick={handleUpload}
-            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300"
-          >
-            上傳
-          </button>
-          {selectedFile && (
-            <p className="text-gray-600">Selected File: {selectedFile.name}</p>
+          <div className="flex gap-4">
+            <button
+              onClick={handleUpload}
+              className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition duration-300"
+            >
+              上傳
+            </button>
+            <button
+              onClick={handleClear}
+              className="bg-gray-500 text-white px-4 py-2 rounded-md hover:bg-gray-600 transition duration-300"
+            >
+              清除
+            </button>
+          </div>
+          {selectedFile && previewUrl && (
+            <div className="flex flex-col items-center">
+              <p className="text-gray-600">選定的文件:</p>
+              <img
+                src={previewUrl}
+                alt="Preview"
+                className="w-auto h-48 object-cover border rounded-md mt-2"
+              />
+            </div>
           )}
-          {fileUrl && (
-            <p className="text-gray-600">Entered URL: {fileUrl}</p>
-          )}
+          {fileUrl && <p className="text-gray-600">輸入的網址: {fileUrl}</p>}
+          {responseMessage && <p className="text-center text-gray-700 mt-4">{responseMessage}</p>}
         </div>
       </div>
     </>
